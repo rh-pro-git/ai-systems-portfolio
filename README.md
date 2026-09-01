@@ -17,6 +17,15 @@ real, running systems; the working repositories are private.
 |---|---|---|
 | [Documentation That Cannot Go Stale](case-studies/drift-gated-docs.md) | Operational rigor · agent context | 2026 |
 
+## Projects
+
+Presentation builds of systems that run for real; each is held to
+[STANDARDS.md](STANDARDS.md).
+
+| Project | What it is | Themes |
+|---|---|---|
+| [TBR Shelf](https://github.com/rh-pro-git/tbr-shelf) | Self-hosted reading tracker: three-catalog metadata resolution with human-in-the-loop verification, a rendered bookshelf, and an optional local-LLM librarian whose memory is gated on operator review. | Optional-by-structure AI · governed learning loop · single-file ops |
+
 ## Themes
 
 - **Structural security over judgment-based guards** — enforcement as what an
