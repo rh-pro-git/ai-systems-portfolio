@@ -29,4 +29,4 @@ real, running systems; the working repositories are private.
 
 ## About
 
-Maintained by [NAME]. Contact: [EMAIL].
+Maintained by Ryan Hill. Contact: github@hillemails.org.
