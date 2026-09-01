@@ -15,7 +15,7 @@ real, running systems; the working repositories are private.
 
 | Case study | Theme | Year |
 |---|---|---|
-| _coming soon_ | | |
+| [Documentation That Cannot Go Stale](case-studies/drift-gated-docs.md) | Operational rigor · agent context | 2026 |
 
 ## Themes
 
