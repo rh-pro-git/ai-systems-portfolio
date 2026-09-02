@@ -15,6 +15,7 @@ real, running systems; the working repositories are private.
 
 | Case study | Theme | Year |
 |---|---|---|
+| [Security an Agent Cannot Forget to Call](case-studies/structural-security.md) | Agent security · structural enforcement | 2026 |
 | [Documentation That Cannot Go Stale](case-studies/drift-gated-docs.md) | Operational rigor · agent context | 2026 |
 
 ## Projects
