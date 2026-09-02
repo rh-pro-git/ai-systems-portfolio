@@ -36,10 +36,11 @@ reached the gate.
 The gate itself was sound wherever it was called. It was not the only path.
 
 - The HTTP router that exposed tools to agents contained **zero** calls to the
-  gate. Its only guard was bearer-token auth. Of roughly 25 tool routes, 5
-  were gated; the rest — including one that piped agent-authored code into a
+  gate. Its only guard was bearer-token auth. Of its 22 routes, six had side
+  effects — including one that piped agent-authored code into a
   browser-automation subprocess, and two messaging routes that policy marked
-  `confirm: true` — fired unconditionally with no audit row.
+  `confirm: true` — and all six fired unconditionally with no audit row. The
+  gated actions lived in a separate dispatcher the router never used.
 - The audit table proved it. Lifetime counts: the one gated email action had
   81 rows. Messaging sends, browser execution, worker wake, note deposits:
   **0 each**. Zero audit rows means the gate never saw them, not that they
@@ -73,7 +74,7 @@ open on omission**. A function call is a boundary only for code that calls it.
 
 The first instinct — a smarter guard, a classifier watching traffic, a
 "sentinel" process judging every action — was researched before anything was
-built, and the literature is unusually unanimous against it. *The Attacker
+built, and the literature is consistent against it.[^1] *The Attacker
 Moves Second* (arXiv 2510.09023) took 12 published prompt-injection defenses
 whose papers reported near-zero attack success and broke most of them at over
 90% under adaptive attack. The design-patterns paper from Invariant, ETH and
@@ -94,10 +95,10 @@ channel, or input surface:
 "Structural" means the control is a boundary the code cannot forget to invoke:
 a database role, a network namespace, a dropped toolset, an allowlist of one.
 Decisions are made on syntactic facts (which role, which host, which tool),
-never on a model's opinion of whether content looks harmful — Rice's theorem
-puts the latter outside the decidable class anyway. LLM-based scanning was
-kept, demoted to telemetry: it raises attacker cost and produces evidence, and
-nothing depends on it.
+never on a model's opinion of whether content looks harmful: content-level
+intent classification is heuristic, and a heuristic is not an enforcement
+boundary. LLM-based scanning was kept, demoted to telemetry: it raises
+attacker cost and produces evidence, and nothing depends on it.
 
 Applied to the audited system, in order:
 
@@ -105,8 +106,11 @@ Applied to the audited system, in order:
    route was wired to the gate, and a single universally-quantified test now
    enumerates the router: every route must be listed as read-only or gated, and
    every gated one must return 403 under a deny decision. A new route that is
-   not classified fails CI. `fail_closed` became real — the evaluator wraps
-   evaluation and denies on any exception.
+   not classified fails CI. The test's guarantee is exactly as wide as the
+   router — it says nothing about other execution surfaces, which each need
+   their own completeness test — but within that surface, omission is no
+   longer silent. `fail_closed` became real — the evaluator wraps evaluation
+   and denies on any exception.
 2. **Take the core token away from everything that is not the core.** The
    pattern already existed in-tree: hand ungoverned components a *read-only*
    token, so the tool server's own tier checks bind them. A regression test
@@ -117,11 +121,14 @@ Applied to the audited system, in order:
    cannot write facts, cannot `UPDATE` the staging table (so it can never
    promote its own proposal), cannot `DELETE`. Promotion is a separate
    operator-run step. A prompt-injection-compromised agent process can only
-   propose. The quarantine is enforced by the database engine, which does not
-   have a code path that forgets.
+   propose. The threat path removed is specific: no sequence of tool calls from
+   the agent side, however it was induced, can create or alter a fact. What
+   remains in scope is everything outside that path — migrations, the
+   promotion step itself, and the operator's judgment.
 4. **Governance runs with no network.** The gate and promotion tooling execute
-   in a container started with `--network none`. Exfiltration from inside the
-   governance step is not filtered; it is unreachable.
+   in a container started with `--network none`. Network egress from inside
+   the governance step is not filtered; there is no interface to filter. The
+   mounted volumes and the operator's terminal remain in scope.
 
 ```
  untrusted content ──► agent process ──► MCP write tool
@@ -141,8 +148,9 @@ Applied to the audited system, in order:
 ### Alternatives considered
 
 - **An LLM "sentinel" judging every action.** Rejected on the evidence above.
-  It also fails Thompson's diverse-double-compiling test: a guard from the same
-  model family as the agent shares its failure modes, and guardrail models
+  It also fails on independence: a checker is only worth having if it does not
+  share the failure modes of the thing it checks, and a guard model from the
+  same family as the agent shares them by construction. Guardrail models
   empirically fall to the same attacks as the models they guard.
 - **Extend injection scanning to the unscanned paths** (web fetch, MCP results,
   transcripts). This was my own earlier recommendation and was withdrawn. The
@@ -187,8 +195,12 @@ CI failure.
 
 ## Selected code
 
-The database role that makes the successor's write path structural. Lightly
-renamed; the shape is exact.
+The database role that makes the successor's write path structural. An
+excerpt from the role file, lightly renamed. Earlier in the same file every
+default privilege is revoked (`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM
+PUBLIC`, `REVOKE CONNECT ON DATABASE ... FROM PUBLIC`), so the grants below are
+the role's entire reach; it is a member of no other role, so `INHERIT`
+confers nothing.
 
 ```sql
 -- The least-privilege role the agent-facing write tool connects as.
@@ -204,6 +216,10 @@ GRANT SELECT ON public.facts, public.entities, public.embeddings,
 GRANT INSERT ON public.pending_ingestion TO agent_proposer;
 -- No other grants. Promotion runs as a different role, in a different process.
 ```
+
+A conformance test connects as this role and asserts that the writes it must
+not be able to make actually fail — the grant file is the intent, the test is
+the evidence.
 
 The test that makes omission a CI failure. Every route in the tool router must
 be enumerated as read-only or gated; every gated route must call the evaluator
@@ -238,9 +254,10 @@ def test_every_side_effecting_route_is_gated(client, monkeypatch) -> None:
 
 ## Outcome
 
-- All 21 side-effecting tool routes gated, with the enumeration test guarding
-  the set; the core token confined to the core service; `fail_closed`
-  implemented rather than declared.
+- All six side-effecting tool routes gated and the sixteen read-only ones
+  enumerated, with the completeness test guarding the set; the core token
+  confined to the core service; `fail_closed` implemented rather than
+  declared.
 - The doctrine is now a gate item applied before any new surface is added.
   Its later applications were direct: an inbound-content channel designed
   around reach rather than scanning, and an egress broker's scope widened
@@ -254,10 +271,10 @@ def test_every_side_effecting_route_is_gated(client, monkeypatch) -> None:
 
 Honest limitations: none of this addresses **memory poisoning by plausible
 false content**. The proposer role stops an agent from writing facts; it does
-not stop an operator from promoting a well-crafted lie. Text-to-text attacks
-remain unsolved by every architectural pattern in the literature, and the
-evidence that the memory half of the problem can be enforced at all — rather
-than only detected — is thin.
+not stop an operator from promoting a well-crafted lie. No pattern in this
+design gives a reliable guarantee against that, and the evidence that the
+memory half of the problem can be *enforced* at all — rather than only
+detected — is thin.
 
 ## Retrospective
 
@@ -274,3 +291,14 @@ confidence without touching correctness, because every reviewer was checking
 that the mechanism existed. The only review that found anything was the one
 that enumerated paths and counted audit rows — evidence from the running
 system, not opinions about its design.
+
+[^1]: Nasr et al., *The Attacker Moves Second*, <https://arxiv.org/abs/2510.09023>;
+    Beurer-Kellner et al., *Design Patterns for Securing LLM Agents against
+    Prompt Injections*, <https://arxiv.org/abs/2506.08837>; Debenedetti et al.,
+    *Defeating Prompt Injections by Design* (CaMeL),
+    <https://arxiv.org/abs/2503.18813>; Ball et al.,
+    <https://arxiv.org/abs/2507.07341>; Anderson, *Computer Security Technology
+    Planning Study*, ESD-TR-73-51 (1972); Schneider, *Enforceable Security
+    Policies*, TISSEC 2000; Bravo-Lillo et al., *Your Attention Please*, SOUPS
+    2013. Each is one study under its own threat model; the case for
+    structural enforcement rests on their agreement, not on any one of them.
