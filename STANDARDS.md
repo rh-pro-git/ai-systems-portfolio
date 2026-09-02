@@ -17,6 +17,11 @@ its repository is the reference example.
 - Created with `tools/new-public-repo.sh`, which wires the fail-closed
   `.githooks/pre-commit` and `pre-push` gates (deny-list + gitleaks) and sets
   the professional git identity before the first commit.
+- The GitHub repository is created with a fine-grained token scoped to the
+  professional account and to repository administration only, read from the
+  secrets manager at call time by a helper kept outside this repo. The helper
+  refuses to proceed if the token authenticates as any other account. Never
+  the personal account's `gh` session.
 - Pushed only over the dedicated SSH alias for the professional account
   (`IdentitiesOnly`), so the wrong key can never be offered.
 - `tools/publish-check.sh <repo>` passes before the first push and before
