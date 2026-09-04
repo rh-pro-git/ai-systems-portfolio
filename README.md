@@ -25,7 +25,7 @@ Presentation builds of systems that run for real; each is held to
 
 | Project | What it is | Themes |
 |---|---|---|
-| [TBR Shelf](https://github.com/rh-pro-git/tbr-shelf) | Self-hosted reading tracker: three-catalog metadata resolution with human-in-the-loop verification, a rendered bookshelf, and an optional local-LLM librarian whose memory is gated on operator review. | Optional-by-structure AI · governed learning loop · single-file ops |
+| [TBR Shelf](https://github.com/rh-pro-git/tbr-shelf) | Self-hosted reading tracker: three-catalog metadata resolution with human-in-the-loop verification, a rendered bookshelf, and an optional local-LLM librarian whose memory is gated on operator review. v1.1 took a 760-book page from 74 MB to 0.3 MB by deferring each tile's detail and serving right-sized derivatives while never re-encoding a source. | Optional-by-structure AI · governed learning loop · measured performance work · single-file ops |
 
 ## Themes
 
